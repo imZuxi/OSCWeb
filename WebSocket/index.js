@@ -1,9 +1,9 @@
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 require('dotenv').config({ path: '../API/.env' });
-const { GetRedisClient } = require('../API/helpers/redis');
-
+const { GetRedisClient, SetRedisKeyEXAsync } = require('../API/helpers/redis'); // custom redis handler;
 const redis = GetRedisClient();
+redis.on('error', (err) => console.error('Redis error:', err));
 const wss = new WebSocket.Server({ port: 1284 });
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7; // 1 week
@@ -46,11 +46,13 @@ wss.on('connection', (ws) => {
         switch (type) {
             case "createsession": {
                 const sessionId = generateSessionId();
+                const shortcode = crc32(sessionId);
                 ws.sessionId = sessionId;
                 activeSessions.set(sessionId, ws);
                 await redis.setEx(GetRedisKeyId(sessionId), SESSION_TTL_SECONDS, JSON.stringify({ params: {} }));
+                await redis.setEx(`privatevar:datahost:${shortcode}`, SESSION_TTL_SECONDS, JSON.stringify({ type: "url", isShort: 1, filename: `https://control.cute.bet/osc/${sessionId}` }));
                 sendMessage(ws, "session_created", sessionId);
-                sendMessage(ws, "connectionAccepted", "New session established.");
+                sendMessage(ws, "connectionAccepted", `https://cute.bet/s/${shortcode}`);
                 break;
             }
 
@@ -58,14 +60,15 @@ wss.on('connection', (ws) => {
                 const sessionId = data;
                 ws.sessionId = sessionId;
                 activeSessions.set(sessionId, ws);
-
                 const redisKey = GetRedisKeyId(sessionId);
+                let shortcode = crc32(sessionId);
                 let stored = await redis.get(redisKey);
                 if (!stored) {
                     await redis.setEx(redisKey, SESSION_TTL_SECONDS, JSON.stringify({ params: {} }));
+                   // await redis.setEx(`privatevar:datahost:${shortcode}`, SESSION_TTL_SECONDS, JSON.stringify({ type: "url", isShort: 1, filename: `https://control.cute.bet/osc/${sessionId}` }));
                 }
-
-                sendMessage(ws, "connectionAccepted", "Session restored or created.");
+                await redis.setEx(`privatevar:datahost:${shortcode}`, SESSION_TTL_SECONDS, JSON.stringify({ type: "url", isShort: 1, filename: `https://control.cute.bet/osc/${sessionId}` }));
+                sendMessage(ws, "connectionAccepted", `https://cute.bet/s/${shortcode}`);
                 break;
             }
 
@@ -115,25 +118,24 @@ wss.on('connection', (ws) => {
                 console.log("Active Sessions:", Array.from(activeSessions.keys()));
                 const targetSessionId = parsed.control;
                 console.log("Requested session:", targetSessionId);
-
+                if (!sessionListeners.has(targetSessionId)) {
+                    sessionListeners.set(targetSessionId, new Set());
+                }
+                sessionListeners.get(targetSessionId).add(ws);
+                console.log(`Subscribed client to future updates for ${targetSessionId}`);
                 const targetWs = activeSessions.get(targetSessionId);
                 if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                     const redisKey = GetRedisKeyId(targetSessionId);
                     let stored = await redis.get(redisKey);
                     sendMessage(ws, "updateparams", JSON.parse(stored));
 
-                   if (!sessionListeners.has(targetSessionId)) {
-                        sessionListeners.set(targetSessionId, new Set());
-                    }
-                    sessionListeners.get(targetSessionId).add(ws);
-                    console.log(`Subscribed client to future updates for ${targetSessionId}`);
+                    // Register this ws as a listener for future updates to this session
+
                 } else {
                     sendMessage(ws, "error", "Target session not found or disconnected.");
                 }
                 break;
             }
-
-
 
             case "keepalive": {
                 sendMessage(ws, "pong", "Still alive.");
@@ -156,3 +158,24 @@ wss.on('connection', (ws) => {
 });
 
 console.log("WebSocket server listening on ws://localhost:1284");
+
+
+
+function crc32(str) {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c;
+  }
+
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < str.length; i++) {
+    const byte = str.charCodeAt(i);
+    crc = table[(crc ^ byte) & 0xFF] ^ (crc >>> 8);
+  }
+
+  return (crc ^ 0xFFFFFFFF) >>> 0; // Unsigned 32-bit integer
+}

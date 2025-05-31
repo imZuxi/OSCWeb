@@ -12,6 +12,7 @@ namespace OSC2Web.Sterlizable
         public static string UserId = "";
         public string connectionId { get; set; } = "";
         public string connectionUrl { get; set; } = "wss://control.cute.bet/ws";
+        public string baseControlUrl { get; set; } = "https://control.cute.bet/osc/";
         public bool debug { get; set; } = false;
         public List<string> blacklistedItems { get; set; } = new();
         public bool removeBlacklistedItems { get; set; } = true;

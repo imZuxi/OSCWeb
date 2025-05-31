@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="OSCExt.cs" />
     <Compile Remove="Redis.cs" />
     <Compile Remove="Sterlizable\RedisEvent.cs" />
   </ItemGroup>

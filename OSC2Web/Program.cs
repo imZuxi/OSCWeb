@@ -11,14 +11,12 @@ namespace OSC2Web
         {
             Console.Clear();
             Console.CancelKeyPress += new ConsoleCancelEventHandler((e, t) => { OnExit(); });
-            OscConnectionSettings.SendPort = 9000; // Set the port for sending OSC messages
-            OscConnectionSettings.ReceivePort = 9001; // Set the port for receiving OSC messages
+            OscConnectionSettings.SendPort = 9000; 
+            OscConnectionSettings.ReceivePort = 9001;
             OscAvatarUtility.Initialize();
+            Config.GetInstance();
             WebSocketManager.CreateSocket();
-            
-            
-
-
+            while (!WebSocketManager.isReady) { };
 
             /*   var config = OscAvatarConfig.CreateAtCurrent();
 
@@ -57,6 +55,8 @@ namespace OSC2Web
             string json = JsonConvert.SerializeObject(avatarConfig, Formatting.Indented);
             File.WriteAllText("activeAvatar.json", json);
             avatarConfig.StripParams().UpdateParams();
+
+            Console.WriteLine("Updated Params Note: if you cant see anything please try refreshing.");
         }
 
 

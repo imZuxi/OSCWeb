@@ -13,7 +13,7 @@ namespace OSC2Web
         private static int reconnectAttempts = 0;
         private static bool shuttingDown = false;
         private const int maxReconnectDelay = 60; // seconds
-
+        internal static bool isReady = false;
         internal static void CreateSocket()
         {
             KeepAliveTimer.Elapsed += (s, e) => { SendMessage("KeepAlive", Config.Instance.connectionId); };
@@ -122,12 +122,17 @@ namespace OSC2Web
             {
                 case "connectionaccepted":
                     Console.WriteLine("Connection accepted!");
-                    Console.WriteLine(wsMessage.Data.ToString());
+                    Console.WriteLine($"Control Link: {Config.Instance.baseControlUrl}" + Config.Instance.connectionId);
+                    Console.WriteLine("shortLink: " + wsMessage.Data.ToString());
+                    isReady = true;
+                    WebSocketManager.isReady = true;
                     break;
                 case "session_created":
                     Console.WriteLine("Session created:");
                     Config.Instance.connectionId = (string)wsMessage.Data;
                     Config.Instance.Save();
+                   // Console.WriteLine($"Control Link: {Config.Instance.baseControlUrl}" + Config.Instance.connectionId);
+               
                     break;
                 case "control":
                     Program.OnChangeRequested(JsonConvert.DeserializeObject<ChangeParam>(wsMessage.Data.ToString()));
